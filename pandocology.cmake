@@ -56,8 +56,8 @@ if(NOT EXISTS ${PP_EXECUTABLE})
         message("PP not found. If this is wrong, please set cache variable PP_EXECUTABLE.")
     endif()
 endif()
-if(NOT EXISTS ${PREPROCESS_TEMP_DIRECTORY})
-    set(PREPROCESS_TEMP_DIRECTORY "_preprocessed")
+if(NOT DEFINED ${PREPROCESS_TEMP_DIRECTORY})
+    set(PREPROCESS_TEMP_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/_preprocessed")
 endif()
 
 ###############################################################################
@@ -336,20 +336,27 @@ function(add_document)
         if(${ADD_DOCUMENT_PREPROCESS})
             if(EXISTS ${PP_EXECUTABLE})
                 message("Preprocessing documents with PP.")
+                set(PREPROCESSING_WITH_PP)
+                file(MAKE_DIRECTORY ${PREPROCESS_TEMP_DIRECTORY})
+                set(preprocessed_build_sources)
                 foreach(native_build_source ${native_build_sources})
-                    get_filename_component(${native_source_name} ${native_build_source} NAME)
+                    get_filename_component(native_source_name ${native_build_source} NAME)
                     set(preprocessed_build_source "${PREPROCESS_TEMP_DIRECTORY}/${native_source_name}")
+                    set(pp_working_directory ${CMAKE_CURRENT_SOURCE_DIR})
+                    file(RELATIVE_PATH preprocessed_output_filepath ${pp_working_directory} ${preprocessed_build_source})
                     add_custom_command(
                         OUTPUT  ${preprocessed_build_source}
                         DEPENDS ${build_sources} ${build_resources} ${ADD_DOCUMENT_DEPENDS}
-                        COMMAND ${PP_EXECUTABLE} ${native_build_sources} ${ADD_DOCUMENT_PP_DIRECTIVES} > ${preprocessed_build_source}
+                        COMMAND ${PP_EXECUTABLE} ${ADD_DOCUMENT_PP_DIRECTIVES} ${native_build_source} > ${preprocessed_output_filepath}
+                        VERBATIM
+                        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                     )
                     add_to_make_clean(${preprocessed_build_source})
                     list(APPEND preprocessed_build_sources ${preprocessed_build_source})
                 endforeach()
                 add_custom_command(
                 OUTPUT  ${output_file} # note that this is in the build directory
-                DEPENDS ${preprocessed_build_sources}
+                DEPENDS ${preprocessed_build_sources} ${build_resources} ${ADD_DOCUMENT_DEPENDS}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${native_product_directory}
                 COMMAND ${PANDOC_EXECUTABLE} ${preprocessed_build_sources} ${ADD_DOCUMENT_PANDOC_DIRECTIVES} -o ${native_output_file}
                 )
